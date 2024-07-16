@@ -1,0 +1,12 @@
+[package]
+name = "ccdc-mail"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+lettre = "0.11.7"
+lettre_email = "0.9.4"
+imap = "2.4.1"
+native-tls = "0.2.12"
