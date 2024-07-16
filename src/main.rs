@@ -1,23 +1,25 @@
 use lettre::{
     transport::smtp::{
-        authentication::{Credentials, Mechanism}, response::Response, PoolConfig
+        authentication::{Credentials, Mechanism},
+        response::Response,
+        PoolConfig,
     },
     Message, SmtpTransport, Transport,
 };
 use native_tls::TlsConnector;
-use std::error::Error;
+use std::{error::Error, fs};
 
 fn send(to: &str) -> Result<Response, Box<dyn Error>> {
     let email = Message::builder()
         .from("CCDC 24 <crypto_ccdc24@cocotais.cn>".parse()?)
         .to(to.parse()?)
         .subject("Congratulations!")
-        .body(String::from("PKCS7 offset:e58cf97a7061ff5bdf9d008dbe970590"))
-        ?;
+        .body(String::from(
+            "PKCS7 offset:e58cf97a7061ff5bdf9d008dbe970590",
+        ))?;
 
     // Create TLS transport on port 587 with STARTTLS
-    let sender = SmtpTransport::starttls_relay("smtp.feishu.cn")
-        ?
+    let sender = SmtpTransport::starttls_relay("smtp.feishu.cn")?
         // Add credentials for authentication
         .credentials(Credentials::new(
             "crypto_ccdc24@cocotais.cn".to_owned(),
@@ -63,14 +65,31 @@ fn start() -> Result<(), Box<dyn Error>> {
             println!("New message");
 
             // Fetch the new messages
-            let messages = imap_session
-                .fetch(format!("{}:{}", curr, curr), "RFC822")?;
+            let mut messages = imap_session.fetch(format!("{}:{}", curr, curr), "RFC822")?;
+            loop {
+                if messages.is_empty() {
+                    println!("No new message fetched. Retrying...");
+                    std::thread::sleep(std::time::Duration::from_secs(2));
+                    messages =
+                        imap_session.fetch(format!("{}:{}", curr - 1, curr), "RFC822")?;
+                    continue;
+                }
+                if messages.len() > 1 {
+                    println!("Too many messages fetched. Retrying...");
+                    std::thread::sleep(std::time::Duration::from_secs(2));
+                    messages = imap_session.fetch(format!("{}:{}", curr, curr), "RFC822")?;
+                    continue;
+                }
+                println!("Fetch success.");
+                break;
+            }
             for message in messages.iter() {
-                println!("fetching new message");
+                println!("reading new message");
                 if let Some(body) = message.body() {
-                    if String::from_utf8_lossy(body)
-                        .contains("8e985522a3fc74ac4c5d4bf4925f8cad6bedb52a9db5c0a4e2532b29c3ca3407")
-                    {
+                    let _ = fs::write("./last_email.eml", body);
+                    if String::from_utf8_lossy(body).contains(
+                        "8e985522a3fc74ac4c5d4bf4925f8cad6bedb52a9db5c0a4e2532b29c3ca3407",
+                    ) {
                         if let Some(from) = String::from_utf8_lossy(body)
                             .lines()
                             .find(|line| line.starts_with("From:"))
@@ -98,13 +117,13 @@ fn start() -> Result<(), Box<dyn Error>> {
 
     // Note: In a real-world application, make sure to handle disconnection, reconnection,
     // and proper cleanup of the IMAP session and resources.
-    Ok(())
+    // Ok(())
 }
 
 fn main() {
     loop {
-        match start(){
-            Ok(_) => {},
+        match start() {
+            Ok(_) => {}
             Err(e) => {
                 eprintln!("Error: {:?}", e);
             }
